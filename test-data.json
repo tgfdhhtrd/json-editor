@@ -1,0 +1,36 @@
+{
+  "user": {
+    "name": "张三",
+    "age": 25,
+    "email": "zhangsan@example.com",
+    "address": {
+      "city": "北京",
+      "district": "朝阳区",
+      "street": "建国路123号"
+    },
+    "hobbies": ["阅读", "游泳", "编程"],
+    "preferences": {
+      "theme": "dark",
+      "language": "zh-CN",
+      "notifications": true
+    }
+  },
+  "products": [
+    {
+      "id": 1,
+      "name": "笔记本电脑",
+      "price": 8999.99,
+      "specs": {
+        "cpu": "Intel i7",
+        "memory": "16GB",
+        "storage": "512GB SSD"
+      }
+    },
+    {
+      "id": 2,
+      "name": "无线鼠标",
+      "price": 199.99,
+      "features": ["蓝牙连接", "人体工学设计", "长续航"]
+    }
+  ]
+}

@@ -9,7 +9,6 @@ import {
   FileText,
   Upload,
   Download,
-  Plus,
   Undo,
   Redo,
   Expand,
@@ -38,8 +37,7 @@ export function Toolbar() {
     toggleFileManager
   } = useEditorStore();
 
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [newFileName, setNewFileName] = useState('');
+
 
   // 保存文件
   const handleSave = async () => {
@@ -53,25 +51,7 @@ export function Toolbar() {
     }
   };
 
-  // 创建新文件
-  const handleCreateFile = async () => {
-    if (!newFileName.trim()) {
-      toast.error('请输入文件名');
-      return;
-    }
 
-    const filename = newFileName.endsWith('.json') ? newFileName : `${newFileName}.json`;
-    
-    try {
-      await fileApi.createFile(filename, {});
-      await loadFiles();
-      setNewFileName('');
-      setShowCreateDialog(false);
-      toast.success('文件创建成功');
-    } catch (error) {
-      toast.error('创建失败: ' + (error instanceof Error ? error.message : '未知错误'));
-    }
-  };
 
   // 导入文件
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -162,16 +142,7 @@ export function Toolbar() {
               title="保存文件 (Ctrl+S)"
             >
               <Save className="w-4 h-4" />
-              保存
-            </button>
-            
-            <button
-              onClick={() => setShowCreateDialog(true)}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg transition-colors shadow-sm"
-              title="新建文件"
-            >
-              <Plus className="w-4 h-4" />
-              新建
+              保存预设
             </button>
           </div>
           
@@ -243,53 +214,7 @@ export function Toolbar() {
         </div>
       </div>
 
-      {/* 创建文件对话框 */}
-      {showCreateDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-96 shadow-xl">
-            <h3 className="text-lg font-semibold mb-4">创建新文件</h3>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                文件名
-              </label>
-              <input
-                type="text"
-                value={newFileName}
-                onChange={(e) => setNewFileName(e.target.value)}
-                placeholder="输入文件名（自动添加.json后缀）"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleCreateFile();
-                  } else if (e.key === 'Escape') {
-                    setShowCreateDialog(false);
-                  }
-                }}
-              />
-            </div>
-            
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => {
-                  setShowCreateDialog(false);
-                  setNewFileName('');
-                }}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleCreateFile}
-                className="px-4 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-              >
-                创建
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </>
   );
 }

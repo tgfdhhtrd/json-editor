@@ -5,6 +5,8 @@ import { Toolbar } from './components/Toolbar';
 import { FileManager } from './components/FileManager';
 import { JsonTreeView } from './components/JsonTree';
 import { TreeView } from './components/TreeView';
+import { PresetSaveDialog } from './components/PresetSaveDialog';
+import { PresetManagementDialog } from './components/PresetManagementDialog';
 
 import { GripHorizontal } from 'lucide-react';
 
@@ -17,7 +19,14 @@ function App() {
     isFileManagerVisible, 
     contextMenu, 
     hideContextMenu,
-    setSelectedNodeForParent
+    setSelectedNodeForParent,
+    isPresetDialogOpen,
+    isPresetManagementDialogOpen,
+    loadPresets,
+    savePreset,
+    setPresetDialogOpen,
+    setPresetManagementDialogOpen,
+    applyPreset
   } = useEditorStore();
   
   // 分隔条拖拽状态
@@ -32,7 +41,8 @@ function App() {
 
   useEffect(() => {
     loadFiles();
-  }, [loadFiles]);
+    loadPresets();
+  }, [loadFiles, loadPresets]);
   
   // 拖拽处理函数
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -229,6 +239,20 @@ function App() {
           </div>
         </div>
       )}
+      
+      {/* 预设对话框 */}
+      <PresetSaveDialog 
+        isOpen={isPresetDialogOpen}
+        onClose={() => setPresetDialogOpen(false)}
+        onSave={savePreset}
+      />
+      
+      <PresetManagementDialog 
+        isOpen={isPresetManagementDialogOpen}
+        onClose={() => setPresetManagementDialogOpen(false)}
+        onApplyPreset={(preset) => applyPreset(preset.id)}
+        currentFileHash={currentFile || ''}
+      />
     </div>
   );
 }

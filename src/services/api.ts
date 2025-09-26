@@ -5,7 +5,6 @@
 
 import type {
   FileInfo,
-  JsonFileResponse,
   SaveFileRequest,
   ExportRequest,
   ApiResponse,
@@ -97,34 +96,81 @@ export const fileApi = {
     const encodedFilename = encodeURIComponent(filename);
     console.log('🔄 开始读取文件:', filename);
     
-    try {
-      const response = await fetch(`/api/files/${encodedFilename}`);
-      
-      if (!response.ok) {
-        throw new Error(`Failed to read file: ${response.statusText}`);
+    // 重试机制
+    const maxRetries = 3;
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`📡 尝试读取文件 (${attempt}/${maxRetries}):`, filename);
+        
+        const response = await fetch(`/api/files/${encodedFilename}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        console.log('📡 响应状态:', {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok,
+          url: response.url
+        });
+        
+        if (!response.ok) {
+          // 尝试获取详细错误信息
+          let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+          try {
+            const errorData = await response.json();
+            if (errorData.error) {
+              errorMessage = errorData.error;
+            }
+          } catch (parseError) {
+            console.warn('无法解析错误响应:', parseError);
+          }
+          throw new Error(errorMessage);
+        }
+        
+        const result = await response.json();
+        console.log('📥 API响应:', {
+          success: result.success,
+          hasData: !!result.data,
+          dataType: typeof result.data,
+          error: result.error
+        });
+        
+        if (!result.success) {
+          throw new Error(result.error || 'API返回失败状态');
+        }
+        
+        if (result.data === undefined || result.data === null) {
+          throw new Error('文件内容为空或未找到');
+        }
+        
+        console.log('✅ 文件读取成功:', filename);
+        return result.data;
+        
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        console.error(`❌ 读取文件失败 (尝试 ${attempt}/${maxRetries}):`, {
+          filename,
+          error: lastError.message,
+          attempt
+        });
+        
+        // 如果不是最后一次尝试，等待一段时间后重试
+        if (attempt < maxRetries) {
+          const delay = attempt * 1000; // 递增延迟：1s, 2s, 3s
+          console.log(`⏳ ${delay}ms后重试...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
       }
-      
-      const result = await response.json();
-      console.log('📥 API响应:', {
-        success: result.success,
-        hasData: !!result.data,
-        dataType: typeof result.data,
-        error: result.error
-      });
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to read file');
-      }
-      
-      if (result.data === undefined || result.data === null) {
-        throw new Error('文件内容为空或未找到');
-      }
-      
-      return result.data;
-    } catch (error) {
-      console.error('❌ 读取文件失败:', error);
-      throw error;
     }
+    
+    // 所有重试都失败了
+    console.error('❌ 所有重试都失败，放弃读取文件:', filename);
+    throw lastError || new Error('文件读取失败');
   },
 
   /**

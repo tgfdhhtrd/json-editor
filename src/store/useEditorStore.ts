@@ -7,11 +7,12 @@ import { create } from 'zustand';
 import type {
   FileInfo,
   JsonNode,
-  EditHistory,
   EditorState,
   TreeNodeState,
   JsonValueType
 } from '../../shared/types';
+import { PresetConfig, PresetManager } from '../types/preset';
+import { presetManager } from '../utils/presetManager';
 import { fileApi } from '../services/api';
 
 
@@ -144,6 +145,20 @@ interface EditorStore extends EditorState {
   
   // 插件顺序更新操作
   updatePluginsOrder: (newOrder: string[]) => void;
+  
+  // 预设管理
+  presetManager: PresetManager;
+  presets: PresetConfig[];
+  isPresetDialogOpen: boolean;
+  isPresetManagementDialogOpen: boolean;
+  
+  // 预设操作
+  loadPresets: () => Promise<void>;
+  savePreset: (name: string, description?: string) => Promise<void>;
+  applyPreset: (presetId: string) => Promise<void>;
+  deletePreset: (presetId: string) => Promise<void>;
+  setPresetDialogOpen: (open: boolean) => void;
+  setPresetManagementDialogOpen: (open: boolean) => void;
   
   // 历史操作
   undo: () => void;
@@ -306,6 +321,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   
   // 全局同步容器选择状态
   globalSelectedContainerType: null,
+  
+  // 预设相关状态
+  presetManager: presetManager,
+  presets: [],
+  isPresetDialogOpen: false,
+  isPresetManagementDialogOpen: false,
 
   // 基础操作
   setLoading: (loading) => set({ loading }),
@@ -323,11 +344,24 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   // 文件操作
   loadFiles: async () => {
+    console.log('🔄 [loadFiles] 开始加载文件列表...');
+    const { files: currentFiles } = get();
+    console.log('📋 [loadFiles] 当前文件列表:', currentFiles.map(f => f.name));
+    
     set({ loading: true, error: null });
     try {
+      console.log('📤 [loadFiles] 调用 fileApi.getFiles()...');
       const files = await fileApi.getFiles();
+      console.log('✅ [loadFiles] API返回文件列表:', files.map(f => f.name));
+      
       set({ files, loading: false });
+      console.log('✅ [loadFiles] 状态更新完成，新文件列表已设置');
+      
+      // 验证状态是否真的更新了
+      const { files: updatedFiles } = get();
+      console.log('🔍 [loadFiles] 验证状态更新:', updatedFiles.map(f => f.name));
     } catch (error) {
+      console.error('❌ [loadFiles] 文件列表加载失败:', error);
       set({ 
         error: error instanceof Error ? error.message : 'Failed to load files',
         loading: false 
@@ -388,14 +422,24 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       get().updateDisplayJsonData();
       console.log('✅ JSON数据更新完成');
     } catch (error) {
-      console.error('❌ 文件加载失败:', error);
+      console.error('❌ 文件加载失败:', {
+        filename,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
       
       let errorMessage = 'Failed to load file';
       if (error instanceof Error) {
         errorMessage = error.message;
         
-        // 如果错误信息包含详细的解析错误，提取关键信息
-        if (errorMessage.includes('JSON解析错误')) {
+        // 提供更友好的错误信息
+        if (errorMessage.includes('Internal Server Error')) {
+          errorMessage = '服务器内部错误，请稍后重试或检查文件是否损坏';
+        } else if (errorMessage.includes('Failed to read file')) {
+          errorMessage = '文件读取失败，请检查文件是否存在且可访问';
+        } else if (errorMessage.includes('Network Error') || errorMessage.includes('fetch')) {
+          errorMessage = '网络连接错误，请检查网络连接后重试';
+        } else if (errorMessage.includes('JSON解析错误')) {
           errorMessage = errorMessage;
         } else if (errorMessage.includes('Unexpected token')) {
           errorMessage = `JSON格式错误: ${errorMessage}`;
@@ -403,6 +447,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           errorMessage = 'JSON文件不完整或格式错误';
         } else if (errorMessage.includes('position')) {
           errorMessage = `JSON语法错误: ${errorMessage}`;
+        } else if (errorMessage.includes('文件内容为空')) {
+          errorMessage = '文件内容为空或格式不正确，请检查文件内容';
+        } else if (errorMessage.includes('所有重试都失败')) {
+          errorMessage = '多次尝试读取文件失败，请检查网络连接和服务器状态';
         }
       }
       
@@ -1217,6 +1265,339 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     return String(value);
   },
 
+  // 预设管理方法
+  loadPresets: async () => {
+    const { presetManager } = get();
+    try {
+      const allPresets = await presetManager.getAllPresets();
+      set({ presets: allPresets });
+    } catch (error) {
+      console.error('Failed to load presets:', error);
+      set({ error: 'Failed to load presets' });
+    }
+  },
+
+  savePreset: async (name, description) => {
+    const { presetManager, jsonContent, currentFile, expandedNodes, jsonData } = get();
+    
+    if (!jsonContent || !jsonContent.plugins) {
+      throw new Error('No plugins data to save');
+    }
+    
+    try {
+      const pluginOrder = Object.keys(jsonContent.plugins);
+      
+      // 收集所有节点的parentDisplayConfig
+      const parentDisplayConfigs: Record<string, {
+        selectedChildren: Array<{
+          containerIndex: number;
+          childPath: string | string[];
+          childKey: string;
+          childValue: any;
+          displayText: string;
+        }>;
+      }> = {};
+      
+      // 递归收集parentDisplayConfig
+      const collectParentDisplayConfigs = (node: JsonNode) => {
+        if (node.parentDisplayConfig && node.parentDisplayConfig.selectedChildren.length > 0) {
+          const pathKey = JSON.stringify(node.path);
+          parentDisplayConfigs[pathKey] = {
+            selectedChildren: node.parentDisplayConfig.selectedChildren.map(child => ({
+              containerIndex: child.containerIndex,
+              childPath: child.childPath,
+              childKey: child.childKey,
+              childValue: child.childValue,
+              displayText: child.displayText
+            }))
+          };
+        }
+        
+        // 递归处理子节点
+        if (node.children) {
+          if (Array.isArray(node.children)) {
+            node.children.forEach(child => collectParentDisplayConfigs(child));
+          } else if (typeof node.children === 'object') {
+            Object.values(node.children).forEach(child => collectParentDisplayConfigs(child));
+          }
+        }
+      };
+      
+      if (jsonData) {
+        collectParentDisplayConfigs(jsonData);
+      }
+      
+      const result = await presetManager.savePreset(
+        name,
+        description || '',
+        pluginOrder,
+        currentFile || 'unknown',
+        expandedNodes,
+        parentDisplayConfigs
+      );
+      
+      if (result.success) {
+        // 重新加载预设列表
+        await get().loadPresets();
+        set({ isPresetDialogOpen: false });
+      } else {
+        throw new Error(result.message || 'Failed to save preset');
+      }
+    } catch (error) {
+      console.error('Failed to save preset:', error);
+      throw error;
+    }
+  },
+
+  applyPreset: async (presetId) => {
+    const { presetManager } = get();
+    
+    try {
+      const result = await presetManager.loadPreset(presetId);
+      if (result.success && result.data) {
+        const preset = result.data;
+        // 应用预设的插件顺序
+        get().updatePluginsOrder(preset.pluginOrder);
+        
+        // 恢复展开状态
+        if (preset.expandedNodes) {
+          set({ expandedNodes: { ...preset.expandedNodes } });
+        }
+        
+        // 恢复父层级容器配置
+        if (preset.parentDisplayConfigs) {
+          const { jsonData } = get();
+          if (jsonData) {
+            // 递归恢复parentDisplayConfig
+            const restoreParentDisplayConfigs = (node: JsonNode): JsonNode => {
+              const pathKey = JSON.stringify(node.path);
+              const savedConfig = preset.parentDisplayConfigs?.[pathKey];
+              
+              if (savedConfig) {
+                node = {
+                  ...node,
+                  parentDisplayConfig: {
+                    selectedChildren: savedConfig.selectedChildren.map(child => ({
+                      containerIndex: child.containerIndex,
+                      childPath: child.childPath,
+                      childKey: child.childKey,
+                      childValue: child.childValue,
+                      displayText: child.displayText
+                    }))
+                  }
+                };
+              }
+              
+              // 递归处理子节点
+              if (node.children) {
+                if (Array.isArray(node.children)) {
+                  node.children = node.children.map(child => restoreParentDisplayConfigs(child));
+                } else if (typeof node.children === 'object') {
+                  const updatedChildren: { [key: string]: JsonNode } = {};
+                  Object.entries(node.children).forEach(([key, child]) => {
+                    updatedChildren[key] = restoreParentDisplayConfigs(child);
+                  });
+                  node.children = updatedChildren;
+                }
+              }
+              
+              return node;
+            };
+            
+            const restoredJsonData = restoreParentDisplayConfigs(jsonData);
+            set({ jsonData: restoredJsonData });
+            
+            // 同时更新displayJsonData
+            const { displayJsonData } = get();
+            if (displayJsonData) {
+              let restoredDisplayJsonData = restoreParentDisplayConfigs(displayJsonData);
+              
+              // 对于plugins路径下的配置，执行同步逻辑
+              const syncAllPluginsLevels = (node: JsonNode): JsonNode => {
+                // 检查是否有plugins路径下的配置需要同步
+                const hasPluginsConfig = Object.keys(preset.parentDisplayConfigs || {}).some(pathKey => {
+                  const path = JSON.parse(pathKey);
+                  return Array.isArray(path) && path.length > 0 && path[0] === 'plugins';
+                });
+                
+                if (!hasPluginsConfig) return node;
+                
+                // 遍历所有plugins路径下的配置
+                Object.entries(preset.parentDisplayConfigs || {}).forEach(([pathKey, config]) => {
+                  const sourcePath = JSON.parse(pathKey);
+                  if (Array.isArray(sourcePath) && sourcePath.length > 0 && sourcePath[0] === 'plugins') {
+                    // 对每个容器配置进行同步
+                    config.selectedChildren.forEach(childConfig => {
+                      const { containerIndex, childPath, childKey, childValue } = childConfig;
+                      
+                      // 同步到其他plugins层级
+                      const syncToPluginsLevel = (currentNode: JsonNode): JsonNode => {
+                        // 如果当前节点是plugins下的某个层级，且路径深度与源路径相同
+                        if (currentNode.path.length > 0 && 
+                            currentNode.path[0] === 'plugins' && 
+                            currentNode.path.length === sourcePath.length &&
+                            JSON.stringify(currentNode.path) !== JSON.stringify(sourcePath)) {
+                          
+                          // 查找对应的子项路径
+                          const targetChildPath: string[] | string = childPath || [];
+                          let targetChildKeys: string[] = [];
+                          
+                          // 处理不同格式的childPath
+                          if (Array.isArray(targetChildPath)) {
+                            targetChildKeys = targetChildPath;
+                          } else if (typeof targetChildPath === 'string') {
+                            targetChildKeys = (targetChildPath as string).split('.');
+                          }
+                          
+                          // 递归查找对应的子项
+                          const findChildByPath = (searchNode: JsonNode, pathKeys: string[]): JsonNode | null => {
+                            if (pathKeys.length === 0) return searchNode;
+                            
+                            const [currentKey, ...remainingKeys] = pathKeys;
+                            if (searchNode.children && typeof searchNode.children === 'object' && !Array.isArray(searchNode.children) && currentKey in searchNode.children) {
+                              const childNode = (searchNode.children as { [key: string]: JsonNode })[currentKey];
+                              if (remainingKeys.length === 0) {
+                                return childNode;
+                              } else {
+                                return findChildByPath(childNode, remainingKeys);
+                              }
+                            }
+                            return null;
+                          };
+                          
+                          // 尝试查找对应的子项
+                          let correspondingChild = findChildByPath(currentNode, targetChildKeys);
+                          let actualChildPath = targetChildKeys;
+                          
+                          // 如果没有找到，尝试多种查找策略
+                          if (!correspondingChild && targetChildKeys.length > 0) {
+                            const targetKey = targetChildKeys[targetChildKeys.length - 1];
+                            
+                            // 策略1: 检查当前节点是否有opts子项
+                            if (currentNode.children && typeof currentNode.children === 'object' && !Array.isArray(currentNode.children) && 'opts' in currentNode.children) {
+                              const optsNode = (currentNode.children as { [key: string]: JsonNode })['opts'];
+                              if (optsNode.children && typeof optsNode.children === 'object' && !Array.isArray(optsNode.children) && targetKey in optsNode.children) {
+                                correspondingChild = (optsNode.children as { [key: string]: JsonNode })[targetKey];
+                                actualChildPath = ['opts', targetKey];
+                              }
+                            }
+                            
+                            // 策略2: 如果还没找到，直接在当前节点的子项中查找同名键
+                            if (!correspondingChild && currentNode.children && typeof currentNode.children === 'object' && !Array.isArray(currentNode.children)) {
+                              if (targetKey in currentNode.children) {
+                                correspondingChild = (currentNode.children as { [key: string]: JsonNode })[targetKey];
+                                actualChildPath = [targetKey];
+                              }
+                            }
+                            
+                            // 策略3: 如果原始路径是多层的，尝试只使用最后一层键名
+                            if (!correspondingChild && targetChildKeys.length > 1) {
+                              if (currentNode.children && typeof currentNode.children === 'object' && !Array.isArray(currentNode.children) && targetKey in currentNode.children) {
+                                correspondingChild = (currentNode.children as { [key: string]: JsonNode })[targetKey];
+                                actualChildPath = [targetKey];
+                              }
+                            }
+                          }
+                          
+                          if (correspondingChild) {
+                            // 更新这个层级的容器配置
+                            const nodeConfig = currentNode.parentDisplayConfig || { selectedChildren: [] };
+                            const existingIndex = nodeConfig.selectedChildren.findIndex(
+                              item => item.containerIndex === containerIndex
+                            );
+                            
+                            const syncChildData = {
+                              childPath: actualChildPath,
+                              childKey: actualChildPath[actualChildPath.length - 1],
+                              childValue: correspondingChild.value,
+                              displayText: `"${actualChildPath[actualChildPath.length - 1]}": ${JSON.stringify(correspondingChild.value)}`
+                            };
+                            
+                            if (existingIndex >= 0) {
+                              nodeConfig.selectedChildren[existingIndex] = {
+                                containerIndex,
+                                ...syncChildData
+                              };
+                            } else {
+                              nodeConfig.selectedChildren.push({
+                                containerIndex,
+                                ...syncChildData
+                              });
+                            }
+                            
+                            currentNode = { ...currentNode, parentDisplayConfig: nodeConfig };
+                          }
+                        }
+                        
+                        // 递归处理子节点
+                        if (currentNode.children) {
+                          if (Array.isArray(currentNode.children)) {
+                            const updatedChildren = currentNode.children.map(child => syncToPluginsLevel(child));
+                            return { ...currentNode, children: updatedChildren };
+                          } else {
+                            const updatedChildren: { [key: string]: JsonNode } = {};
+                            Object.entries(currentNode.children).forEach(([key, child]) => {
+                              updatedChildren[key] = syncToPluginsLevel(child);
+                            });
+                            return { ...currentNode, children: updatedChildren };
+                          }
+                        }
+                        
+                        return currentNode;
+                      };
+                      
+                      node = syncToPluginsLevel(node);
+                    });
+                  }
+                });
+                
+                return node;
+              };
+              
+              restoredDisplayJsonData = syncAllPluginsLevels(restoredDisplayJsonData);
+              set({ displayJsonData: restoredDisplayJsonData });
+            }
+          }
+        }
+        
+        // 设置为最后使用的预设
+        await presetManager.setLastUsedPreset(presetId);
+        
+        set({ isPresetManagementDialogOpen: false });
+      } else {
+        throw new Error(result.message || 'Preset not found');
+      }
+    } catch (error) {
+      console.error('Failed to apply preset:', error);
+      throw error;
+    }
+  },
+
+  deletePreset: async (presetId) => {
+    const { presetManager } = get();
+    
+    try {
+      const result = await presetManager.deletePreset(presetId);
+      if (result.success) {
+        // 重新加载预设列表
+        await get().loadPresets();
+      } else {
+        throw new Error(result.message || 'Failed to delete preset');
+      }
+    } catch (error) {
+      console.error('Failed to delete preset:', error);
+      throw error;
+    }
+  },
+
+  setPresetDialogOpen: (open) => {
+    set({ isPresetDialogOpen: open });
+  },
+
+  setPresetManagementDialogOpen: (open) => {
+    set({ isPresetManagementDialogOpen: open });
+  },
+
   // 重置状态
   reset: () => {
     set({
@@ -1239,6 +1620,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       displayJsonContent: null,
       displayJsonData: null,
       globalSelectedContainerType: null,
+      presets: [],
+      isPresetDialogOpen: false,
+      isPresetManagementDialogOpen: false,
       contextMenu: {
         show: false,
         x: 0,

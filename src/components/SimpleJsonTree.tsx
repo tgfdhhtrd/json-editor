@@ -153,7 +153,11 @@ function getChildNodes(value: any): Array<{ key: string; value: any }> {
 }
 
 export default function SimpleJsonTree({ data }: SimpleJsonTreeProps) {
-  const { updatePluginsOrder } = useEditorStore();
+  const { 
+    updatePluginsOrder, 
+    setPresetDialogOpen, 
+    setPresetManagementDialogOpen 
+  } = useEditorStore();
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [mergedGroups, setMergedGroups] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<{

@@ -3,18 +3,17 @@
  * 包含文件操作按钮和功能菜单
  */
 
-import { useState } from 'react';
+
 import {
-  Save,
-  FileText,
-  Upload,
   Download,
-  Undo,
-  Redo,
+  Upload,
   Expand,
   Minimize2,
-  Settings,
-  PanelLeft
+  PanelLeft,
+  Undo,
+  Redo,
+  Save,
+  Settings
 } from 'lucide-react';
 import { useEditorStore } from '../store/useEditorStore';
 import { fileApi } from '../services/api';
@@ -23,9 +22,7 @@ import { toast } from 'sonner';
 export function Toolbar() {
   const {
     currentFile,
-    isModified,
     jsonContent,
-    saveCurrentFile,
     expandAllNodes,
     collapseAllNodes,
     canUndo,
@@ -33,23 +30,16 @@ export function Toolbar() {
     undo,
     redo,
     loadFiles,
+    loadFile,
     isFileManagerVisible,
-    toggleFileManager
+    toggleFileManager,
+    setPresetDialogOpen,
+    setPresetManagementDialogOpen
   } = useEditorStore();
 
 
 
-  // 保存文件
-  const handleSave = async () => {
-    if (!currentFile || !isModified) return;
-    
-    try {
-      await saveCurrentFile();
-      toast.success('文件保存成功');
-    } catch (error) {
-      toast.error('保存失败: ' + (error instanceof Error ? error.message : '未知错误'));
-    }
-  };
+
 
 
 
@@ -58,32 +48,28 @@ export function Toolbar() {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    console.log('🔄 开始导入文件:', file.name);
+
     try {
-      // 添加文件信息日志
-      console.log('开始导入文件:', {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        lastModified: new Date(file.lastModified).toISOString()
-      });
-      
+      console.log('📤 调用 fileApi.importFile...');
       const result = await fileApi.importFile(file);
-      
-      console.log('文件导入成功:', result);
+      console.log('✅ 文件导入API成功，返回结果:', result);
       
       // 重新加载文件列表
+      console.log('🔄 调用 loadFiles() 重新加载文件列表...');
       await loadFiles();
+      console.log('✅ loadFiles() 执行完成');
+      
+      // 自动加载新导入的文件
+      console.log('🔄 调用 loadFile() 加载新文件:', result.filename);
+      await loadFile(result.filename);
+      console.log('✅ loadFile() 执行完成');
       
       // 显示成功消息
       toast.success(`文件 "${result.filename}" 导入成功`);
+      console.log('🎉 文件导入流程全部完成');
     } catch (error) {
-      console.error('Import failed:', {
-        error: error instanceof Error ? error.message : '未知错误',
-        stack: error instanceof Error ? error.stack : undefined,
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type
-      });
+      console.error('❌ Import failed:', error);
       
       // 显示更详细的错误信息
       let errorMessage = '导入失败';
@@ -124,6 +110,26 @@ export function Toolbar() {
       <div className="h-16 bg-gradient-to-r from-white to-slate-50 border-b border-slate-200 flex items-center justify-between px-6 shadow-md">
         {/* 左侧：文件操作 */}
         <div className="flex items-center space-x-3">
+          {/* 预设操作按钮 */}
+          <button
+            onClick={() => setPresetDialogOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors shadow-sm"
+            title="保存预设"
+          >
+            <Save className="w-4 h-4" />
+            保存预设
+          </button>
+          <button
+            onClick={() => setPresetManagementDialogOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors shadow-sm"
+            title="管理预设"
+          >
+            <Settings className="w-4 h-4" />
+            管理预设
+          </button>
+          
+          <div className="w-px h-8 bg-slate-300"></div>
+          
           {!isFileManagerVisible && (
             <button
               onClick={toggleFileManager}
@@ -134,17 +140,7 @@ export function Toolbar() {
             </button>
           )}
           
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={handleSave}
-              disabled={!currentFile || !isModified}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-              title="保存文件 (Ctrl+S)"
-            >
-              <Save className="w-4 h-4" />
-              保存预设
-            </button>
-          </div>
+
           
           <div className="w-px h-8 bg-slate-300"></div>
           

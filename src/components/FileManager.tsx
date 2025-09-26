@@ -3,7 +3,7 @@
  * 显示文件列表和文件操作功能
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   FileText,
   Folder,
@@ -30,9 +30,30 @@ export function FileManager() {
     contextMenu,
     showContextMenu,
     hideContextMenu
-  } = useEditorStore();
+  } = useEditorStore((state) => ({
+    files: state.files,
+    currentFile: state.currentFile,
+    loading: state.loading,
+    loadFile: state.loadFile,
+    loadFiles: state.loadFiles,
+    deleteFile: state.deleteFile,
+    toggleFileManager: state.toggleFileManager,
+    contextMenu: state.contextMenu,
+    showContextMenu: state.showContextMenu,
+    hideContextMenu: state.hideContextMenu
+  }));
 
   const [searchTerm, setSearchTerm] = useState('');
+
+  // 添加调试日志监听files状态变化
+  useEffect(() => {
+    console.log('🔍 [FileManager] files状态变化:', {
+      filesCount: files.length,
+      fileNames: files.map(f => f.name),
+      currentFile,
+      loading
+    });
+  }, [files, currentFile, loading]);
 
   // 过滤文件
   const filteredFiles = files.filter(file =>
@@ -63,10 +84,6 @@ export function FileManager() {
 
   // 删除文件
   const handleDeleteFile = async (filename: string) => {
-    if (!confirm(`确定要删除文件 "${filename}" 吗？此操作不可撤销。`)) {
-      return;
-    }
-
     try {
       await deleteFile(filename);
       toast.success(`文件 "${filename}" 已删除`);
@@ -218,6 +235,17 @@ export function FileManager() {
                       </div>
                     </div>
 
+                    {/* 删除按钮 */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation(); // 阻止事件冒泡，避免触发文件加载
+                        handleDeleteFile(file.name);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-200"
+                      title={`删除文件 ${file.name}`}
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 </div>
               ))}

@@ -15,7 +15,7 @@ const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, '../..');
 
 /**
- * 获取指定目录下名为"模板.json"的文件
+ * 获取指定目录下的所有JSON文件
  */
 export async function getJsonFiles(dirPath: string = PROJECT_ROOT): Promise<FileInfo[]> {
   try {
@@ -26,8 +26,8 @@ export async function getJsonFiles(dirPath: string = PROJECT_ROOT): Promise<File
       const fullPath = path.join(dirPath, entry.name);
       const stats = await fs.stat(fullPath);
       
-      // 只处理名为"模板.json"的文件
-      if (entry.isFile() && entry.name === '模板.json') {
+      // 处理所有.json文件
+      if (entry.isFile() && entry.name.endsWith('.json')) {
         files.push({
           name: entry.name,
           path: fullPath,
@@ -36,7 +36,7 @@ export async function getJsonFiles(dirPath: string = PROJECT_ROOT): Promise<File
           type: 'file'
         });
       } else if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
-        // 递归获取子目录中的"模板.json"文件
+        // 递归获取子目录中的JSON文件
         const subFiles = await getJsonFiles(fullPath);
         files.push(...subFiles);
       }

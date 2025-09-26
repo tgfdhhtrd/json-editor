@@ -15,7 +15,7 @@ import {
 import { useEditorStore } from '../store/useEditorStore';
 
 export function StatusBar() {
-  const { currentFile, hasUnsavedChanges, jsonData, loading } = useEditorStore();
+  const { currentFile, isModified, jsonData, loading } = useEditorStore();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -84,7 +84,7 @@ export function StatusBar() {
       };
     }
     
-    if (hasUnsavedChanges) {
+    if (isModified) {
       return {
         icon: <AlertCircle size={14} />,
         text: '有未保存的更改',

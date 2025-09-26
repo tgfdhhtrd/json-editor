@@ -3,7 +3,7 @@
  * 支持容器点击和同步选择功能
  */
 
-import React from 'react';
+
 import { Folder } from 'lucide-react';
 import { useEditorStore } from '../store/useEditorStore';
 import type { JsonNode } from '../../shared/types';
@@ -23,7 +23,7 @@ export function TreeView({ className = '' }: TreeViewProps) {
       return null;
     }
     
-    const pluginsNode = jsonData.children['plugins'];
+    const pluginsNode = (jsonData.children as { [key: string]: JsonNode })['plugins'];
     if (!pluginsNode) {
       return null;
     }
@@ -45,20 +45,7 @@ export function TreeView({ className = '' }: TreeViewProps) {
     );
   }
   
-  // 获取plugins下的所有子节点
-  const getPluginChildren = (): JsonNode[] => {
-    if (!pluginsNode.children || typeof pluginsNode.children !== 'object') {
-      return [];
-    }
-    
-    if (Array.isArray(pluginsNode.children)) {
-      return pluginsNode.children;
-    }
-    
-    return Object.values(pluginsNode.children);
-  };
-  
-  const pluginChildren = getPluginChildren();
+
   
   // 获取plugins下的直接子项名称
   const getPluginItemNames = (): string[] => {

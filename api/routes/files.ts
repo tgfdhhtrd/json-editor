@@ -102,6 +102,10 @@ router.post('/import', upload.single('file'), async (req: Request, res: Response
     const content = await importJsonFile(req.file.buffer, req.file.originalname);
     console.log('File imported successfully:', req.file.originalname);
     
+    // 将解析后的内容保存到磁盘
+    await saveJsonFile(req.file.originalname, { content });
+    console.log('File saved to disk:', req.file.originalname);
+    
     const response: ApiResponse = {
       success: true,
       data: {

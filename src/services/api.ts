@@ -233,7 +233,14 @@ export const fileApi = {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // 尝试解析服务端返回的错误信息
+        try {
+          const errorData = await response.json();
+          const msg = errorData?.error || errorData?.message || `HTTP error! status: ${response.status}`;
+          throw new Error(msg);
+        } catch (_) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
       }
 
       const result = await response.json();

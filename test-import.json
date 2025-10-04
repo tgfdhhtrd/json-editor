@@ -1,0 +1,14 @@
+{
+  "name": "Sample",
+  "version": "1.0.0",
+  "items": [
+    {
+      "id": 1,
+      "value": "A"
+    },
+    {
+      "id": 2,
+      "value": "B"
+    }
+  ]
+}

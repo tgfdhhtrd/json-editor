@@ -5,7 +5,6 @@
 
 
 import {
-  Download,
   Upload,
   Expand,
   Minimize2,
@@ -90,20 +89,7 @@ export function Toolbar() {
     }
   };
 
-  // 导出文件
-  const handleExport = async () => {
-    if (!currentFile || !jsonContent) {
-      toast.error('没有可导出的文件');
-      return;
-    }
 
-    try {
-      await fileApi.exportFile(jsonContent, currentFile, 'pretty');
-      toast.success('文件导出成功');
-    } catch (error) {
-      toast.error('导出失败: ' + (error instanceof Error ? error.message : '未知错误'));
-    }
-  };
 
   return (
     <>
@@ -155,16 +141,6 @@ export function Toolbar() {
                 className="hidden"
               />
             </label>
-            
-            <button
-              onClick={handleExport}
-              disabled={!currentFile || !jsonContent}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-              title="导出文件"
-            >
-              <Download className="w-4 h-4" />
-              导出
-            </button>
           </div>
         </div>
 

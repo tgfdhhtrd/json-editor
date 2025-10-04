@@ -7,7 +7,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import type { Request, Response, NextFunction } from 'express';
-import filesRouter from './routes/files.js';
+import filesRouter from './routes/files';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -68,16 +68,39 @@ app.get('*', (req: Request, res: Response) => {
 /**
  * error handler middleware
  */
-app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
+app.use((error: any, req: Request, res: Response, next: NextFunction) => {
   console.error('Unhandled error:', {
-    message: error.message,
-    stack: error.stack,
+    message: error?.message,
+    stack: error?.stack,
     url: req.url,
     method: req.method
   });
+
+  // 识别并处理Multer相关错误为400
+  if (error) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        error: 'File size too large. Maximum size is 10MB.'
+      });
+    }
+    if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({
+        success: false,
+        error: 'Unexpected file field. Expected field name: file'
+      });
+    }
+    if (typeof error.message === 'string' && error.message.includes('Only JSON files are allowed')) {
+      return res.status(400).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
   res.status(500).json({
     success: false,
-    error: 'Server internal error',
+    error: error?.message || 'Server internal error',
   });
 })
 

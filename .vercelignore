@@ -1,0 +1,6 @@
+api/
+*.ts
+tsconfig*.json
+.trae/
+test-*.js
+222.json

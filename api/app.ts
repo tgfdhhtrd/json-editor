@@ -52,7 +52,7 @@ app.use(express.static(path.join(__dirname, '../dist')));
 app.use('/api/files', filesRouter);
 
 // 健康检查接口
-app.get('/health', (req: Request, res: Response) => {
+app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 

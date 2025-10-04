@@ -13,11 +13,14 @@ const __dirname = path.dirname(__filename);
 
 // 项目根目录
 const PROJECT_ROOT = path.resolve(__dirname, '../..');
+// 在无服务器环境使用可写临时目录
+const IS_SERVERLESS = !!process.env.VERCEL || !!process.env.NOW_REGION || !!process.env.AWS_EXECUTION_ENV;
+const DATA_DIR = IS_SERVERLESS ? path.join(process.env.TMPDIR || '/tmp', 'json-editor') : PROJECT_ROOT;
 
 /**
  * 获取指定目录下的所有JSON文件
  */
-export async function getJsonFiles(dirPath: string = PROJECT_ROOT): Promise<FileInfo[]> {
+export async function getJsonFiles(dirPath: string = DATA_DIR): Promise<FileInfo[]> {
   try {
     const files: FileInfo[] = [];
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
@@ -57,7 +60,7 @@ export async function readJsonFile(filename: string): Promise<JsonFileResponse> 
     console.log('开始读取文件:', filename);
     
     // 安全路径处理，防止路径遍历攻击
-    const safePath = path.resolve(PROJECT_ROOT, filename);
+    const safePath = path.resolve(DATA_DIR, filename);
     console.log('解析后的文件路径:', safePath);
     
     // 确保文件在项目目录内
@@ -151,7 +154,7 @@ export async function readJsonFile(filename: string): Promise<JsonFileResponse> 
  */
 export async function saveJsonFile(filename: string, request: SaveFileRequest): Promise<void> {
   try {
-    const safePath = path.resolve(PROJECT_ROOT, filename);
+    const safePath = path.resolve(DATA_DIR, filename);
     
     // 确保文件在项目目录内
     if (!safePath.startsWith(PROJECT_ROOT)) {
@@ -394,7 +397,7 @@ export function exportJsonFile(request: ExportRequest): string {
  */
 export async function createJsonFile(filename: string, content: any = {}): Promise<void> {
   try {
-    const safePath = path.resolve(PROJECT_ROOT, filename);
+    const safePath = path.resolve(DATA_DIR, filename);
     
     // 确保文件在项目目录内
     if (!safePath.startsWith(PROJECT_ROOT)) {
@@ -423,7 +426,7 @@ export async function createJsonFile(filename: string, content: any = {}): Promi
  */
 export async function deleteJsonFile(filename: string): Promise<void> {
   try {
-    const safePath = path.resolve(PROJECT_ROOT, filename);
+    const safePath = path.resolve(DATA_DIR, filename);
     
     // 确保文件在项目目录内
     if (!safePath.startsWith(PROJECT_ROOT)) {
